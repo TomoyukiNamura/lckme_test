@@ -11,7 +11,8 @@ n_train = 1000
 n_test  = 100
 
 # 説明変数の次元数
-dim_x = 3
+#dim_x = 1
+dim_x_list = [1,3,5]
 
 # 目的変数の次元数
 dim_y = 1
@@ -31,11 +32,11 @@ data_type = 'nonlinear'
 #          [0.8, 1.0]]
 
 #coef_lm = np.array([0.0,0.03])
-coef_lm = np.append(np.array([0.0]),np.ones(dim_x))
+#coef_lm = np.append(np.array([0.0]),np.ones(dim_x))
 
 ## data_type = 'nonlinear'のパラメータ
-nc_nlm = 1000
-sigma_u_nlm = 0.1
+nc_nlm = 3
+sigma_u_nlm = 0.3
 
 ## 共通のパラメータ
 var_eps = 0.001
@@ -44,8 +45,9 @@ var_eps = 0.001
 
 ## 各モデルのパラメータ
 # カーネルパラメータ・正則化パラメータ(全手法共通)
-lv = -5
+lv = -3
 uv = 3
+
 
 sigma_x_list = 10.0**np.arange(lv,uv+1)
 sigma_y_list = np.array([0.01])
@@ -57,3 +59,7 @@ r_subsample = 0.1
 
 # 弱学習器の個数(dc)
 n_weaklearner = 10
+
+
+# 比較対象モデルリスト
+model_name_list = ['ckm', 'rss', 'nw', 'rff', 'nys', 'dc', 'lckm']

@@ -67,7 +67,7 @@ from sklearn import kernel_mean as km
     
 
 
-def generateLinearModelData(n_train,n_test,dim_x,dim_y,coef_lm,var_eps):   
+def generateLinearModelData(n_train,n_test,dim_x,dim_y,var_eps):   
     # U(-1,1)の乱数を発生
     tmp_rand = (np.random.rand((n_train + n_test)*dim_x)*2-1).reshape(-1, dim_x)
     
@@ -77,6 +77,7 @@ def generateLinearModelData(n_train,n_test,dim_x,dim_y,coef_lm,var_eps):
     # 訓練データ作成
     train = {}
     train['x'] = tmp_rand[0:n_train,:]
+    coef_lm = np.append(np.array([0.0]),np.ones(dim_x))
     train['y'] = coef_lm[0] + np.dot(train['x'], coef_lm[1:(dim_x+1)].reshape(-1,1)).reshape(-1, dim_y)
     train['y'] = train['y'] + epsilon[0:n_train,:]
     
@@ -115,7 +116,8 @@ def generateNonLinearModelData(n_train,n_test,dim_x,dim_y,nc_nlm,sigma_u_nlm,var
     u = (np.random.rand(nc_nlm*dim_x)*2-1).reshape(-1, dim_x)
     
     # 各uの重み定義(全て等しい重み)
-    weights_u = np.ones(u.shape[0])/u.shape[0]
+    #weights_u = np.ones(u.shape[0])/u.shape[0]
+    weights_u = (np.random.rand(nc_nlm)*2-1)
     weights_u = weights_u.reshape(1, -1)
     
     # Σγk(x,Ui)　部分の定義

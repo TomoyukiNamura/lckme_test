@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -7,24 +8,38 @@ import pandas as pd
 
 color_map = ['r','g','b','orange','m','y','c']
 
-def plotTrainTest(train, test, truth_line):
+def makeNewFolder(folder_name):
+    if os.path.exists(folder_name)==False:
+        os.mkdir(folder_name)
+
+def plotTrainTest(train, test, truth_line, output=None):
     
     if train['x'].shape[1]>1:
-        print('dim_x is not 1')
+        print('No plot (dim_x is not 1)')
         return None
     
     if train['y'].shape[1]>1:
-        print('dim_y is not 1')
+        print('No plot (dim_y is not 1)')
         return None
     
     plt.scatter(train['x'], train['y'])
     plt.scatter(test['x'], test['y'])
     plt.plot(truth_line['x'], truth_line['y'],c='K')
     plt.grid()
+    if output!=None:
+        plt.savefig(f"{output}/train_data.png", bbox_inches="tight")
     plt.show()
     
     
-def plotModelResult(train,test,subsample_ID,model,model_name,result,sigma_x,sigma_y,alpha,output_pass,truth_line):
+def plotModelResult(train,test,subsample_ID,model,model_name,result,sigma_x,sigma_y,alpha,truth_line,output_pass):
+    
+    if train['x'].shape[1]>1:
+        print('No plotted result (dim_x is not 1)')
+        return None
+    
+    # 保存フォルダ作成
+    makeNewFolder(output_pass)
+            
     # 予測曲線用のデータ作成
 #    tmp_min = min(train['x'])
 #    tmp_max = max(train['x'])
@@ -52,8 +67,9 @@ def plotModelResult(train,test,subsample_ID,model,model_name,result,sigma_x,sigm
     #plt.scatter(test['x'], result[model_name]['pred_mean'],s=20,c='green')# 
     plt.grid()
     plt.title(f'{model_name} (σx={sigma_x},σy={sigma_y},ε={alpha})')
-    plt.savefig(f'{output_pass}/plot_{model_name}_σx{sigma_x}_σy{sigma_y}_ε{alpha}.png')
+    plt.savefig(f'{output_pass}/plot_{model_name}_σx{sigma_x}_σy{sigma_y}_ε{alpha}.png', bbox_inches="tight")
     plt.show()
+
     
     
     
@@ -83,15 +99,17 @@ def heatmapResults(result,sigma_x_list,sigma_y_list,alpha_list,j,func,output_pas
             for k in range(len(alpha_list)):
                 
                 # RKHSnormErrorのarray取得
-                tmp_array = result[i][j][k][model_names[m]]['RKHSnormError']
+                #tmp_array = result[i][j][k][model_names[m]]['RKHSnormError']
                 
                 if func=='mean':
                     # 平均
-                    tmp_list_RKHSnormError.append(np.mean(tmp_array))
+                    #tmp_list_RKHSnormError.append(np.mean(tmp_array))
+                    tmp_list_RKHSnormError.append(result[i][j][k][model_names[m]]['mean_RKHSnormError'])
                     
                 elif func=='max':
                     # 最大値
-                    tmp_list_RKHSnormError.append(np.max(tmp_array))
+                    #tmp_list_RKHSnormError.append(np.max(tmp_array))
+                    tmp_list_RKHSnormError.append(result[i][j][k][model_names[m]]['max_RKHSnormError'])
                     
                 else:
                     print('must choose func')
@@ -112,7 +130,7 @@ def heatmapResults(result,sigma_x_list,sigma_y_list,alpha_list,j,func,output_pas
         sns.heatmap(df_pivot, annot=True, fmt="1.2f", linewidths=.5, cmap="Reds",
                     vmin=0.0,vmax=3.0)
         plt.title(f"RKHS norm error ({model_names[m]})")
-        plt.savefig(f'{output_pass}/heatmap_{model_names[m]}_RKHSnormError_{func}.png',bbox_inches="tight")
+        plt.savefig(f'{output_pass}/heatmap_RKHSnormError_{func}_{model_names[m]}.png',bbox_inches="tight")
         plt.show()
         
         
@@ -185,15 +203,15 @@ def plot2dResults(result,sigma_x_list,sigma_y_list,alpha_list,xlabel,i,j,k,outpu
     
     if xlabel == "σx":
         plt.title(f"RKHS norm error  (σy={sigma_y_list[j]} ε={alpha_list[k]})")
-        plt.savefig(f'{output_pass}/RKHSnormError_{xlabel}_σy{sigma_y_list[j]}_ε{alpha_list[k]}.png')
+        plt.savefig(f'{output_pass}/RKHSnormError_{xlabel}_σy{sigma_y_list[j]}_ε{alpha_list[k]}.png', bbox_inches="tight")
         
     elif xlabel == "σy":
         plt.title(f"RKHS norm error  (σx={sigma_x_list[i]} ε={alpha_list[k]})")
-        plt.savefig(f'{output_pass}/RKHSnormError_{xlabel}_σx{sigma_x_list[i]}_ε{alpha_list[k]}.png')
+        plt.savefig(f'{output_pass}/RKHSnormError_{xlabel}_σx{sigma_x_list[i]}_ε{alpha_list[k]}.png', bbox_inches="tight")
         
     elif xlabel == "ε":
         plt.title(f"RKHS norm error  (σx={sigma_x_list[i]} σy={sigma_y_list[j]})")
-        plt.savefig(f'{output_pass}/RKHSnormError_{xlabel}_σx{sigma_x_list[i]}_σy{sigma_y_list[j]}.png')
+        plt.savefig(f'{output_pass}/RKHSnormError_{xlabel}_σx{sigma_x_list[i]}_σy{sigma_y_list[j]}.png', bbox_inches="tight")
 
     plt.show()
     
@@ -224,3 +242,28 @@ def doPlot2dResults(result,sigma_x_list,sigma_y_list,alpha_list,output_pass):
                 plot2dResults(result,sigma_x_list,sigma_y_list,alpha_list,
                                   xlabel="ε",i=i,j=j,k=k,output_pass=output_pass)
     
+    
+def plotDimVsError(best_norm_error_list, dim_x_list, plot_target, output):
+     # モデル名取得
+    model_name_list = list(best_norm_error_list['dim_x_1'].keys())
+        
+    for m in range(len(model_name_list)):
+        
+        # データをプロット用に整理
+        tmp_best_norm_error_list = []
+        
+        for dim_x in dim_x_list:
+            tmp_best_norm_error_list.append(best_norm_error_list[f'dim_x_{dim_x}'][model_name_list[m]][plot_target])
+            
+        # プロット
+        plt.plot(np.array(dim_x_list), np.array(tmp_best_norm_error_list),
+                 marker="o", color=color_map[m],label=model_name_list[m],alpha=0.7)
+        
+    plt.grid() 
+    plt.ylabel(plot_target)
+    plt.xlabel(f"dim")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
+    plt.savefig(f'{output}/{plot_target}.png', bbox_inches="tight")
+    plt.show()
+        
+        

@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os
 import numpy as np
 
-from cfg import config as cfg
 from functions import plotter
 from functions import function as func
 from sklearn import kernel_mean as km
@@ -16,35 +14,81 @@ from sklearn.kernel_mean import NystroemConditionalKernelMean as nysckm
 from sklearn.kernel_mean import DivideAndConquerCKME as dc
 
 
-def doTrainAndPred(model, model_name, train, test, subsample_ID, mu_bar_list, v_bar, sigma_x, sigma_y, alpha, output_pass,truth_line):
-    # 予測
-    emb_y_pred = model.predict(test['x'])
+def initAndTrainModel(emb_X,emb_y,model_name,params):
     
-    ## 結果を集計保存
-    result = func.summarizeResult(emb_y_pred, test, sigma_y, mu_bar_list, v_bar)
+    n_subsample = round(emb_X.X.shape[0]*params['r_subsample'])
+    subsample_id = np.arange(0,n_subsample)
     
-#            np.mean(tmp_result['ckm']['RKHSnormError'])
-#            np.sqrt(np.mean(tmp_result['ckm']['truth_predmean_Error'] ** 2 ))
-#            np.sqrt(np.mean(tmp_result['ckm']['testy_predmean_Error'] ** 2 ))
+    if model_name=='ckm':
+        # init model
+        model = ckm(alpha=params['alpha'])
+        # train model
+        model.fit(emb_X, emb_y)
+        
     
-    # フォルダ作成
-    output_folder_name = f"{output_pass}/{model_name}"
-    func.makeNewFolder(output_folder_name)
+    elif model_name=='icf':
+        print(f'model name {model_name} is not found')
+        return None
+        
     
-    # 結果のプロット
-    if train['x'].shape[1]==1:
-        plotter.plotModelResult(train,test,subsample_ID,model,model_name,result,sigma_x,sigma_y,alpha,output_folder_name,truth_line)
+    elif model_name=='rss':
+        # init model
+        model = ckm(alpha=params['alpha'], method='rss')
+        # train model
+        model.fit(emb_X, emb_y, subsample_id=subsample_id)
+        
+        
+    elif model_name=='nw':
+        # init model
+        model = ckm(alpha=params['alpha'], method = 'nw')
+        # train model
+        model.fit(emb_X, emb_y)
+        
+
+    elif model_name=='rff':
+        # init model
+        model = rffckm(alpha=params['alpha'], n_components=n_subsample, method='RBFSampler')
+        # train model
+        model.fit(emb_X, emb_y)
+
+
+    elif model_name=='nys':
+        # init model
+        model = nysckm(alpha=params['alpha'], n_components=n_subsample)
+        # train model
+        model.fit(emb_X, emb_y, subsample_id=subsample_id)
+        
+        
+    elif model_name=='dc':
+        # init model
+        model = dc(alpha=params['alpha'], n_components=n_subsample, n_weaklearners=params['n_weaklearner'])
+        # train model
+        model.fit(emb_X, emb_y)
+        
+
+    elif model_name=='fr':
+        print(f'model name {model_name} is not found')
+        return None
+
+
+    elif model_name=='lckm':
+        # init model
+        model = lckm(alpha=params['alpha'], knn_k=n_subsample, random_sub_sampling=False)
+        # train model
+        model.fit(emb_X, emb_y)
+        
+
+    else:
+        print(f'model name {model_name} is not found')
+        return None
     
-    return result
+    
+    return model,subsample_id
 
 
 
 
-def doExperiment(train, test, sigma_x_list, sigma_y_list, alpha_list, mu_bar_list, v_bar, output_pass,truth_line):
-    # nys,rff,rss用のサブサンプルIDを抽出
-    train_id = np.arange(0,train['x'].shape[0])
-    n_subsample = round(train['x'].shape[0]*cfg.r_subsample)
-    subsample_id = np.random.choice(train_id,n_subsample)
+def doExperiment(train, test, experiment_params, sigma_x_list, sigma_y_list, alpha_list, mu_bar_list, v_bar, output_pass,truth_line):    
 
     # 結果保存場所    
     result = [[[0 for i3 in range(len(alpha_list))] for i2 in range(len(sigma_y_list))] for i1 in range(len(sigma_x_list))]
@@ -54,133 +98,48 @@ def doExperiment(train, test, sigma_x_list, sigma_y_list, alpha_list, mu_bar_lis
         for j in range(len(sigma_y_list)):
             for k in range(len(alpha_list)):
                 
-                print(f'===============================================')
+                print(f' start ==============================================')
+                
+                tmp_dim_x_tmp = train['x'].shape[1]
+                print(f'dim_x : {tmp_dim_x_tmp}')
                 print(f'sigma_x : {sigma_x_list[i]}')
                 print(f'sigma_y : {sigma_y_list[j]}')
                 print(f'alpha : {alpha_list[k]}')
                 
-                # 結果格納場所を定義
-                tmp_result = {}
+                # パラメータを設定
+                params = {}
+                params['alpha']         = alpha_list[k]
+                params['r_subsample']   = experiment_params['r_subsample']
+                params['n_weaklearner'] = experiment_params['n_weaklearner']
                 
                 # 訓練データのカーネル平均作成
                 emb_X = km.KernelMean(train['x'],kernel='rbf',gamma=1.0/sigma_x_list[i])
-                emb_y = km.KernelMean(train['y'],kernel='rbf',gamma=1.0/sigma_y_list[j])
-                                    
+                emb_y = km.KernelMean(train['y'],kernel='rbf',gamma=1.0/sigma_y_list[j])             
                 
-                ### 条件つきカーネル平均=======================================
-                model_name = 'ckm'
+                # 結果格納場所を定義
+                tmp_result = {}
                 
-                # 初期化
-                ckm_model = ckm(alpha=alpha_list[k])
-                
-                # 学習・予測
-                ckm_model.fit(emb_X, emb_y)
-                tmp_result[model_name] = doTrainAndPred(model=ckm_model, model_name=model_name, train=train , test=test, subsample_ID=None, mu_bar_list=mu_bar_list, v_bar=v_bar, 
-                          sigma_x=sigma_x_list[i], sigma_y=sigma_y_list[j], alpha=alpha_list[k], output_pass=f"{output_pass}",truth_line=truth_line)
+                # 評価実施
+                for model_name in experiment_params['model_name_list']:
+                    print(f'== {model_name} ==')
                     
-
-
-                
-                ### 4.1 Incomplete Cholesky Factorization (ICF)=======================================
-                model_name = 'icf'
-                
-                
-                
-                ### 4.2 Random Sub-sampling=======================================
-                model_name = 'rss'
-                                
-                # モデル初期化
-                rss_model = ckm(alpha=alpha_list[k], method='rss')
-                
-                # 学習・予測
-                rss_model.fit(emb_X, emb_y, subsample_id=subsample_id)
-                tmp_result[model_name] = doTrainAndPred(model=rss_model, model_name=model_name, train=train, test=test, subsample_ID=subsample_id, mu_bar_list=mu_bar_list, v_bar=v_bar, 
-                          sigma_x=sigma_x_list[i], sigma_y=sigma_y_list[j], alpha=alpha_list[k], output_pass=f"{output_pass}",truth_line=truth_line)
-                
-               
+                    # 初期化・学習
+                    model,subsample_id = initAndTrainModel(emb_X=emb_X, emb_y=emb_y, model_name=model_name, params=params)
+                    
+                    # 予測
+                    pred = model.predict(test['x'])
+                    
+                    # 結果を集計保存
+                    tmp_result[model_name] = func.summarizeResult(pred, test, sigma_y_list[j], mu_bar_list, v_bar)
+                    
+                    # 結果をプロット
+#                    plotter.plotModelResult(train,test,subsample_id,model,model_name,tmp_result[model_name],
+#                                            sigma_x_list[i],sigma_y_list[j],alpha_list[k],truth_line,f"{output_pass}/{model_name}")  
                 
                 
-                
-                ### 4.3 Nadaraya-Watson kernel regression=======================================
-                model_name = 'nw'
-                
-                # モデル初期化
-                nw_model = ckm(alpha=alpha_list[k], method = 'nw')
-                
-                # 学習・予測
-                nw_model.fit(emb_X, emb_y)
-                tmp_result[model_name] = doTrainAndPred(model=nw_model, model_name=model_name, train=train, test=test, subsample_ID=subsample_id, mu_bar_list=mu_bar_list, v_bar=v_bar, 
-                          sigma_x=sigma_x_list[i], sigma_y=sigma_y_list[j], alpha=alpha_list[k], output_pass=f"{output_pass}",truth_line=truth_line)
-                
-                
-                
-                
-                ### 4.4 Random Fourier Features (RFF)=======================================
-                model_name = 'rff'
-                                
-                # モデル初期化
-                rffckm_model = rffckm(alpha=alpha_list[k],n_components=n_subsample, method='RBFSampler')
-#                rffckm_model = rffckm(alpha=alpha_list[k],n_components=n_subsample, method='Nystroem')
-                                                
-                # 学習・予測
-                rffckm_model.fit(emb_X, emb_y)
-                tmp_result[model_name] = doTrainAndPred(model=rffckm_model, model_name=model_name, train=train, test=test, subsample_ID=subsample_id, mu_bar_list=mu_bar_list, v_bar=v_bar, 
-                          sigma_x=sigma_x_list[i], sigma_y=sigma_y_list[j], alpha=alpha_list[k], output_pass=f"{output_pass}",truth_line=truth_line)
-               
-                
-                
-                
-                ### Nystroem=======================================
-                model_name = 'nys'
-                                
-                # モデル初期化
-                nysckm_model = nysckm(alpha=alpha_list[k],n_components=n_subsample)
-                
-                # 学習・予測
-                nysckm_model.fit(emb_X, emb_y, subsample_id=subsample_id)
-                tmp_result[model_name] = doTrainAndPred(model=nysckm_model, model_name=model_name, train=train, test=test, subsample_ID=subsample_id, mu_bar_list=mu_bar_list, v_bar=v_bar, 
-                          sigma_x=sigma_x_list[i], sigma_y=sigma_y_list[j], alpha=alpha_list[k], output_pass=f"{output_pass}",truth_line=truth_line)
-               
-              
-
-                
-                
-                ### 4.5 Divide and Conquer CKME=======================================
-                model_name = 'dc'
-                
-                # モデル初期化
-                dc_model = dc(alpha=alpha_list[k],n_components=n_subsample,n_weaklearners=cfg.n_weaklearner)
-#                dc_model = dc(alpha=1,n_components=100,n_weaklearners=10)
-
-                # 学習・予測
-                dc_model.fit(emb_X, emb_y)
-                tmp_result[model_name] = doTrainAndPred(model=dc_model, model_name=model_name, train=train, test=test, subsample_ID=subsample_id, mu_bar_list=mu_bar_list, v_bar=v_bar, 
-                          sigma_x=sigma_x_list[i], sigma_y=sigma_y_list[j], alpha=alpha_list[k], output_pass=f"{output_pass}",truth_line=truth_line)
-               
-                
-                
-                ### 4.6 Fast Randomized CKME
-                model_name = 'fr'
-                
-                
-                
-                ### 【提案法】局所条件つきカーネル平均=======================================
-                model_name = 'lckm'
-                
-                # モデル初期化
-                lckm_model = lckm(alpha=alpha_list[k],knn_k=n_subsample,random_sub_sampling=False)
-                
-                # 学習・予測
-                lckm_model.fit(emb_X, emb_y)
-                tmp_result[model_name] = doTrainAndPred(model=lckm_model, model_name=model_name, train=train, test=test, subsample_ID=subsample_id, mu_bar_list=mu_bar_list, v_bar=v_bar, 
-                          sigma_x=sigma_x_list[i], sigma_y=sigma_y_list[j], alpha=alpha_list[k], output_pass=f"{output_pass}",truth_line=truth_line)
-               
-             
-                
-                
-                #### 結果の保存=======================================
+                # 結果を保存
                 result[i][j][k] = tmp_result
                 
-                print(f'===============================================')
+                print(f'finish ==============================================')
 
     return result
