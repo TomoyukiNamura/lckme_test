@@ -9,7 +9,14 @@ from sklearn import kernel_mean as km
 def makeNewFolder(folder_name):
     if os.path.exists(folder_name)==False:
         os.mkdir(folder_name)
+        return True
+    else:
+        return False
 
+def removeElementFromList(target_list, element):
+    if element in target_list:
+        target_list.remove(element)
+        
 def ckmeOfNorm1dim(y,mu_bar,v_bar,sigma_y):
     return norm.pdf(x=y, loc=mu_bar, scale=np.sqrt(v_bar+sigma_y))
 
@@ -89,7 +96,12 @@ def selectBestNormErrorInParams(result,sigma_x_list,sigma_y_list,alpha_list):
                     
                     tmp_list_mean_RKHSnormError.append(result[id_sigma_x][id_sigma_y][id_alpha][model_name]['mean_RKHSnormError'])
                     tmp_list_max_RKHSnormError.append(result[id_sigma_x][id_sigma_y][id_alpha][model_name]['max_RKHSnormError'])
-                    
+        
+        # nanを除外
+        tmp_list_mean_RKHSnormError = [x for x in tmp_list_mean_RKHSnormError if np.isnan(x)==False]
+        tmp_list_max_RKHSnormError  = [x for x in tmp_list_max_RKHSnormError if np.isnan(x)==False]
+
+        # 最良の結果を保存
         best_norm_error_list[model_name]['best_RKHS_norm_error'] = min(tmp_list_mean_RKHSnormError)
         best_norm_error_list[model_name]['best_sup_norm_error'] = min(tmp_list_max_RKHSnormError)
 

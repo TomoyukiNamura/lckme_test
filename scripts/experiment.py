@@ -4,7 +4,7 @@
 
 """
 
-局所カーネル平均の実験
+局所カーネル平均の実験d
 
 """
 
@@ -21,6 +21,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime
+import shutil
 
 ## 設定ファイル，関数ファイル読み込み
 from cfg import config as cfg
@@ -32,34 +33,35 @@ from functions import do_experiment
 
 
 ### 結果フォルダ作成=========================================================
-from cfg import config as cfg
+today = datetime.now().strftime("%Y%m%d")
 
-output_pass = f'output/{datetime.now().strftime("%Y%m%d")}'
+output_pass = f'output/{today}'
 func.makeNewFolder(output_pass)
 
-output_pass = f'output/{datetime.now().strftime("%Y%m%d")}/{cfg.data_type}'
+output_pass = f'output/{today}/{cfg.data_type}'
 func.makeNewFolder(output_pass)
 
-output_pass = f'output/{datetime.now().strftime("%Y%m%d")}/{cfg.data_type}/r_subsample_0.1'
-func.makeNewFolder(output_pass)
+#output_pass = f'output/{today}/{cfg.data_type}/r_subsample_0.1'
+#func.makeNewFolder(output_pass)
+#
+#output_pass = f'output/{today}/{cfg.data_type}/r_subsample_0.5'
+#func.makeNewFolder(output_pass)
 
-output_pass = f'output/{datetime.now().strftime("%Y%m%d")}/{cfg.data_type}/r_subsample_0.5'
-func.makeNewFolder(output_pass)
+# cfgファイルをoutputにコピー
+shutil.copyfile("cfg/config.py", f"{output_pass}/config.py")
 
 
 ### 実験 =============================================================
 # 実験用データ作成
-from cfg import config as cfg
 
-
-for i_experiment in range(5):
+for i_experiment in range(cfg.n_experiment):
     
-    output_pass_org = f'output/{datetime.now().strftime("%Y%m%d")}/{cfg.data_type}/r_subsample_0.1/{i_experiment}'
+#    output_pass_org = f'output/{today}/{cfg.data_type}/r_subsample_0.1/{i_experiment}'
+    output_pass_org = f'output/{today}/{cfg.data_type}/{i_experiment}'
     func.makeNewFolder(output_pass_org)
     
     # プロット用結果格納場所
-    best_norm_error_list_subsample1 = {}
-    best_norm_error_list_subsample2 = {}
+    best_norm_error_list = {}
     
     for id_dim_x in range(len(cfg.dim_x_list)):
         
@@ -79,36 +81,54 @@ for i_experiment in range(5):
         
         
         # 実験実施(サブサンプル率別)
-        for r_subsample in [0.5]:
-            
-            experiment_params = {}
-            experiment_params['model_name_list'] = cfg.model_name_list
-            experiment_params['r_subsample']     = r_subsample
-            experiment_params['n_weaklearner']   = cfg.n_weaklearner
-            
-            result = do_experiment.doExperiment(train=train, test=test,experiment_params=experiment_params , sigma_x_list=cfg.sigma_x_list, sigma_y_list=cfg.sigma_y_list, alpha_list=cfg.alpha_list, 
-                                                mu_bar_list=test['y'], v_bar=cfg.var_eps, output_pass=output_pass,truth_line=truth_line)
-            
-            # 結果プロット(ヒートマップ)
-            plotter.heatmapResults(result,cfg.sigma_x_list,cfg.sigma_y_list,cfg.alpha_list,j=0,func='mean' ,output_pass=output_pass)
-            plotter.heatmapResults(result,cfg.sigma_x_list,cfg.sigma_y_list,cfg.alpha_list,j=0,func='max' ,output_pass=output_pass)
+        experiment_params = {}
+        experiment_params['model_name_list'] = cfg.model_name_list
+        experiment_params['r_subsample']     = cfg.r_subsample
+        experiment_params['n_weaklearner']   = cfg.n_weaklearner
         
-            # 結果プロット(2d result)
-            #plotter.doPlot2dResults(result,cfg.sigma_x_list,cfg.sigma_y_list,cfg.alpha_list,output_pass)
+        result = do_experiment.doExperiment(train=train, test=test,experiment_params=experiment_params , sigma_x_list=cfg.sigma_x_list, sigma_y_list=cfg.sigma_y_list, alpha_list=cfg.alpha_list, 
+                                            mu_bar_list=test['y'], v_bar=cfg.var_eps, output_pass=output_pass,truth_line=truth_line)
         
-            # 最良のRKHSnorm/sup_norm_errorを取得
-            if r_subsample==0.1:
-                best_norm_error_list_subsample1[f'dim_x_{cfg.dim_x_list[id_dim_x]}'] = func.selectBestNormErrorInParams(result,cfg.sigma_x_list ,cfg.sigma_y_list ,cfg.alpha_list)
+        # 結果プロット(ヒートマップ)
+        plotter.heatmapResults(result,cfg.sigma_x_list,cfg.sigma_y_list,cfg.alpha_list,j=0,func='mean' ,output_pass=output_pass)
+        plotter.heatmapResults(result,cfg.sigma_x_list,cfg.sigma_y_list,cfg.alpha_list,j=0,func='max' ,output_pass=output_pass)
     
-            elif r_subsample==0.5:
-                best_norm_error_list_subsample2[f'dim_x_{cfg.dim_x_list[id_dim_x]}'] = func.selectBestNormErrorInParams(result,cfg.sigma_x_list ,cfg.sigma_y_list ,cfg.alpha_list)
+        # 結果プロット(2d result)
+        #plotter.doPlot2dResults(result,cfg.sigma_x_list,cfg.sigma_y_list,cfg.alpha_list,output_pass)
+    
+        # 最良のRKHSnorm/sup_norm_errorを取得
+        best_norm_error_list[f'dim_x_{cfg.dim_x_list[id_dim_x]}'] = func.selectBestNormErrorInParams(result=result,sigma_x_list=cfg.sigma_x_list ,sigma_y_list=cfg.sigma_y_list ,alpha_list=cfg.alpha_list)
     
     # ベストErrorのプロット
-    #output_pass = f'output/{datetime.now().strftime("%Y%m%d")}/{cfg.data_type}/r_subsample_0.1'
-    plotter.plotDimVsError(best_norm_error_list=best_norm_error_list_subsample1, dim_x_list=cfg.dim_x_list, plot_target='best_RKHS_norm_error', output=output_pass_org)
-    plotter.plotDimVsError(best_norm_error_list=best_norm_error_list_subsample1, dim_x_list=cfg.dim_x_list, plot_target='best_sup_norm_error', output=output_pass_org)
+    plotter.plotDimVsError(best_norm_error_list=best_norm_error_list, dim_x_list=cfg.dim_x_list, plot_target='best_RKHS_norm_error', output=output_pass_org)
+    plotter.plotDimVsError(best_norm_error_list=best_norm_error_list, dim_x_list=cfg.dim_x_list, plot_target='best_sup_norm_error', output=output_pass_org)
 
 
-#output_pass = f'output/{datetime.now().strftime("%Y%m%d")}/{cfg.data_type}/r_subsample_0.5'
-#plotter.plotDimVsError(best_norm_error_list=best_norm_error_list_subsample2, dim_x_list=cfg.dim_x_list, plot_target='best_RKHS_norm_error', output=output_pass)
-#plotter.plotDimVsError(best_norm_error_list=best_norm_error_list_subsample2, dim_x_list=cfg.dim_x_list, plot_target='best_sup_norm_error', output=output_pass)
+
+
+
+#import matplotlib.pyplot as plt
+#import seaborn as sns
+#import pandas as pd
+#
+#color_map = ['r','g','b','orange','m','y','c']
+#
+#
+#
+#R_FIGSIZE = 2
+#plt.rcParams['figure.figsize'] = [6.0*R_FIGSIZE, 4.0*R_FIGSIZE]
+#plt.rcParams['font.size'] = 10.0*R_FIGSIZE
+#
+#tmp_df = pd.read_csv(f"{output_pass}/heatmap_RKHSnormError_max_ckm.csv", index_col=0)
+#
+#
+#sns.heatmap(tmp_df, annot=True, fmt="1.2f", linewidths=.5, cmap="Reds", vmin=0.0,vmax=3.0)
+#plt.title(f"RKHS norm error (ckm)")
+#plt.xlabel("ε (10^x)")
+#plt.xlabel("σx (10^x)")
+
+
+
+
+
+    

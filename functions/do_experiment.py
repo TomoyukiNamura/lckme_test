@@ -27,8 +27,10 @@ def initAndTrainModel(emb_X,emb_y,model_name,params):
         
     
     elif model_name=='icf':
-        print(f'model name {model_name} is not found')
-        return None
+        # init model
+        model = ckm(alpha=params['alpha'], method='ic', ic_tol=0.00001)
+        # train model
+        model.fit(emb_X, emb_y)
         
     
     elif model_name=='rss':

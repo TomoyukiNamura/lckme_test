@@ -6,7 +6,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 
-color_map = ['r','g','b','orange','m','y','c']
+color_map = ['r','brown','g','b','orange','m','y','c']
+
+
+
+R_FIGSIZE = 2
+plt.rcParams['figure.figsize'] = [6.0*R_FIGSIZE, 4.0*R_FIGSIZE]
+plt.rcParams['font.size'] = 10.0*R_FIGSIZE
 
 def makeNewFolder(folder_name):
     if os.path.exists(folder_name)==False:
@@ -125,13 +131,29 @@ def heatmapResults(result,sigma_x_list,sigma_y_list,alpha_list,j,func,output_pas
         # RKHSnormErrorのピボットテーブル作成
         df_pivot = pd.pivot_table(data=df_RKHSnormError , values='RKHS norm error', 
                                           columns='σx', index='ε', aggfunc=np.mean)
+        
+        # index, columnsの表記変更
+        tmp_list = []
+        for idx in list(df_pivot.index):
+            tmp_list.append(str(int(np.log10(float(idx)))))
+        df_pivot.index = tmp_list    
+            
+        tmp_list = []
+        for column in list(df_pivot.columns):
+            tmp_list.append(str(int(np.log10(float(column)))))
+        
+        df_pivot.columns = tmp_list  
             
         # ヒートマップ作成
         sns.heatmap(df_pivot, annot=True, fmt="1.2f", linewidths=.5, cmap="Reds",
                     vmin=0.0,vmax=3.0)
         plt.title(f"RKHS norm error ({model_names[m]})")
+        plt.ylabel("ε (10^x)")
+        plt.xlabel("σx (10^x)")
         plt.savefig(f'{output_pass}/heatmap_RKHSnormError_{func}_{model_names[m]}.png',bbox_inches="tight")
         plt.show()
+        
+        df_pivot.to_csv(f"{output_pass}/heatmap_RKHSnormError_{func}_{model_names[m]}.csv")
         
         
 
@@ -244,8 +266,9 @@ def doPlot2dResults(result,sigma_x_list,sigma_y_list,alpha_list,output_pass):
     
     
 def plotDimVsError(best_norm_error_list, dim_x_list, plot_target, output):
-     # モデル名取得
-    model_name_list = list(best_norm_error_list['dim_x_1'].keys())
+    # モデル名取得
+    
+    model_name_list = list(best_norm_error_list[list(best_norm_error_list.keys())[0]].keys())
         
     for m in range(len(model_name_list)):
         
@@ -266,4 +289,29 @@ def plotDimVsError(best_norm_error_list, dim_x_list, plot_target, output):
     plt.savefig(f'{output}/{plot_target}.png', bbox_inches="tight")
     plt.show()
         
+
+
+def plotNtrainVsError(best_norm_error_list, model_name_list, plot_target, output):
+    
+    x_axis = list(best_norm_error_list.keys())
+    
+    for m in range(len(model_name_list)):
+        y_axis = []
+        for x_axis_num in x_axis:
+            best_norm_error = best_norm_error_list[x_axis_num]
+            
+            if model_name_list[m] in list(best_norm_error.keys()):
+                y_axis.append(best_norm_error[model_name_list[m]][plot_target])
+                
+            else:
+                y_axis.append(np.nan)
         
+        plt.plot(x_axis, y_axis,
+                     marker="o", color=color_map[m], label=model_name_list[m], alpha=0.7)
+        
+    plt.grid() 
+    plt.title(plot_target)
+    plt.xlabel("n training data")
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0)
+    plt.savefig(f'{output}/n_train_vs_error_{plot_target}.png', bbox_inches="tight")
+    plt.show()

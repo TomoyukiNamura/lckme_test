@@ -7,6 +7,7 @@
 import numpy as np
 from scipy import linalg
 import copy
+from copy import deepcopy
 
 from .base import BaseEstimator, RegressorMixin
 from .metrics.pairwise import pairwise_kernels,euclidean_distances
@@ -49,18 +50,101 @@ def hsic(emb_x,emb_y):
     
     return np.trace(np.dot(np.dot(K,H),np.dot(L,H)))/(m-1)**2
     
+# 不完全コレスキー分解
+#def _incompleteCholeskyDecomposition(G, tol=0.00001):
+#    # 1
+#    A = deepcopy(G)
+#    A_dush = deepcopy(A)
+#    A_dush_org = deepcopy(A_dush)
+#    diagR = deepcopy(np.diag(G))
+#    n = G.shape[0]
+#    P = np.eye(n)
+#    R = np.zeros((n,n))
+#    R_org = deepcopy(R)
+#    
+#    for i in range(n):
+#        # 2
+#        if np.sum(diagR) < tol:
+#            break
+#        
+#        # 3
+#        j_star = np.argmax(diagR[i:n])
+#        
+#        # 4
+#        P[i,i] = 0
+#        P[j_star,j_star] = 0
+#        P[j_star,j_star] = 0
+#        P[i,j_star] = 1
+#        P[j_star,i] = 1
+#        
+#        A_dush[i,:] = A_dush_org[j_star,:]
+#        A_dush[j_star,:] = A_dush_org[i,:]
+#        A_dush_org = deepcopy(A_dush)
+#    
+#        A_dush[:,i] = A_dush_org[:,j_star]
+#        A_dush[:,j_star] = A_dush_org[:,i]
+#        A_dush_org = deepcopy(A_dush)
+#        
+#        R[i,0:i] = R_org[j_star,0:i]
+#        R[j_star,0:i] = R_org[i,0:i]
+#        R_org = deepcopy(R)
+#        
+#        # 5 
+#        R[i,i] = np.sqrt(A_dush[i,i])
+#        
+#        # 6
+#        if i>0:
+#            R[(i+1):n,i] = (1/R[i,i]) * A_dush[(i+1):n,i]
+#        else:
+#            R[(i+1):n,i] = (1/R[i,i]) * (A_dush[(i+1):n,i] - np.sum(np.dot(R[(i+1):n,0:(i-1)], R[[i],0:(i-1)].T), axis=1))
+#        
+#        # 7
+#        diagR[(i+1):n] = np.diag(A_dush)[(i+1):n] - np.sum(R[(i+1):n, 0:i]**2, axis=1)
+#        
+#    
+#    R = R[:,0:max([i, 1])]
+#
+#    return R
+    
 
-def _inv_gram_matrix(emb_X, alpha=1,knn_id=None, sample_weight=None):
+def _incompleteCholeskyDecomposition(G, tol=0.00001):
+    A = deepcopy(G) # A = G;
+    diagR = deepcopy(np.diag(G)) # diagR = diag(G);
+    n = G.shape[0] # n = size(G, 1);
+    p = np.array(list(range(n)))#p = 1:n;
+    R = np.zeros((n,n))#R = zeros(n, n);
+    i = 0 # i = 1;
+    
+    while((i<=(n-1)) and (sum(diagR[i:n]) > tol)): # while((i <= n) && (sum(diagR(i:n)) > tol))
+        maxidx = np.argmax(diagR[i:n]) # [~, maxidx] = max(diagR(i:n));
+        maxidx = maxidx + i    # maxidx = maxidx + i - 1;   
+        p[[i,maxidx]] = p[[maxidx,i]] # p([i, maxidx]) = p([maxidx, i]);
+        A[: ,[i, maxidx]] = A[: ,[maxidx, i]] # A(:, [i, maxidx]) = A(:, [maxidx, i]);
+        A[[i, maxidx], :] = A[[maxidx, i], :]# A([i, maxidx], :) = A([maxidx, i], :);
+        R[[i, maxidx], 0:(i+1)] = R[[maxidx, i], 0:(i+1)]#R([i, maxidx], 1:i) = R([maxidx, i], 1:i);
+        R[i, i] = np.sqrt(diagR[maxidx])#R(i, i) = sqrt(diagR(maxidx));
+        if i < (n-1): #if i < n
+            if i > 0: #if i > 1
+                R[(i+1):n, i] = (A[(i+1):n, i] - np.dot(R[(i+1):n, 0:i] , R[i, 0:i].T)) / R[i, i]# R((i+1):n, i) = (A((i+1):n, i) - R((i+1):n, 1:(i-1)) * R(i, 1:(i-1))') / R(i, i);
+            else:
+                R[(i+1):n, i] = A[(i+1):n, i] / R[i, i]# R((i+1):n, i) = A((i+1):n, i) / R(i, i);
+            diagA = np.diag(A)# diagA = diag(A);
+            diagR[(i+1):n] = diagA[(i+1):n] - np.sum(R[(i+1):n, 0:(i+1)]**2, axis=1)# diagR((i+1):n) = diagA((i+1):n) - sum(R((i+1):n, 1:i).^2, 2);
+        i += 1 #i = i+1;
+    R = R[:, 0:max([i, 1])]# R = R(:, 1:max([(i-1), 1]));
+    return R
+
+def _inv_gram_matrix(emb_X, alpha=1,knn_id=None, sample_weight=None, ic=False, ic_tol=0.00001):
     if sample_weight is not None and not isinstance(sample_weight, float):
         sample_weight = check_array(sample_weight, ensure_2d=False)
 
     if knn_id is None:
-        K = emb_X._get_kernel(emb_X.X)
+        K = emb_X._get_kernel(emb_X.X)  # Gx
     else:
-        K = emb_X._get_kernel(emb_X.X[knn_id,:])
-    alpha = np.atleast_1d(alpha)
+        K = emb_X._get_kernel(emb_X.X[knn_id,:])  # Gx
+    alpha = np.atleast_1d(alpha)  # nε
 
-    n_samples = K.shape[0]
+    n_samples = K.shape[0]  # n
     one_alpha = (alpha == alpha[0]).all()
     has_sw = isinstance(sample_weight, np.ndarray) \
         or sample_weight not in [1.0, None]
@@ -70,12 +154,25 @@ def _inv_gram_matrix(emb_X, alpha=1,knn_id=None, sample_weight=None):
         return None
 
     if one_alpha:
-        # (K - alphaIn)^(-1)
-        K.flat[::n_samples + 1] += alpha[0]
-        inv_gram_ = linalg.inv(K)
-
-        # 一応Kを元の値にもどす
-        K.flat[::n_samples + 1] -= alpha[0]
+        if ic==True:
+            # 不完全コレスキー分解
+            U = _incompleteCholeskyDecomposition(K, tol=ic_tol)
+            UTU = np.dot(U.T, U)
+            UTU.flat[::n_samples + 1] += alpha[0]
+            
+            # (1/nε)(In - U (UTU+nεIn)^(-1) UT)
+            inv_gram_ = (1.0/alpha[0]) * (np.eye(n_samples) - np.dot(np.dot(U, linalg.inv(UTU)), U.T))
+            
+            UTU.flat[::n_samples + 1] -= alpha[0]
+            
+        else:
+            K.flat[::n_samples + 1] += alpha[0]
+            
+            # (K - alphaIn)^(-1) = (Gx - nεIn)^(-1)
+            inv_gram_ = linalg.inv(K)
+    
+            # 一応Kを元の値にもどす
+            K.flat[::n_samples + 1] -= alpha[0]
 
     else:
         print('Not supported!!')
@@ -227,7 +324,7 @@ class KernelMean(object):
 class ConditionalKernelMean(BaseEstimator, RegressorMixin):
     """Conditional Kernel Mean.
     """
-    def __init__(self, alpha=1, method = 'default',n_components=None):
+    def __init__(self, alpha=1, method='default', n_components=None, ic_tol=0.00001):
         """
         method:{'default','nw','rss'}
             default: original    
@@ -238,6 +335,7 @@ class ConditionalKernelMean(BaseEstimator, RegressorMixin):
         self.alpha = alpha
         self.method = method
         self.n_components = n_components
+        self.ic_tol = ic_tol
 
     def fit(self, emb_X, emb_y, sample_weight=None, subsample_id=None):
         """Fit Conditional Kernel Mean model
@@ -262,9 +360,12 @@ class ConditionalKernelMean(BaseEstimator, RegressorMixin):
 
         if self.method=='nw':
             self.inv_gram_ = np.nan
+            
+        elif self.method=='ic':
+            self.inv_gram_ = _inv_gram_matrix(self.emb_X, alpha=self.alpha, knn_id=None, sample_weight=sample_weight, ic=True, ic_tol=self.ic_tol)
         
         else:
-            self.inv_gram_ = _inv_gram_matrix(self.emb_X, alpha=self.alpha, knn_id=None, sample_weight=sample_weight)
+            self.inv_gram_ = _inv_gram_matrix(self.emb_X, alpha=self.alpha, knn_id=None, sample_weight=sample_weight, ic=False)
                     
         return self
     
